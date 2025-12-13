@@ -1,0 +1,45 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+venv/
+ENV/
+env/
+*.egg-info/
+dist/
+build/
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Environment
+.env
+.env.local
+
+# Logs
+*.log
+logs/
+
+# Database (if you want to exclude)
+# programs.json
+# subscriptions.json
+# sent_notifications.json
+
+# Cache
+frontend/programs-cache.json
+
+# Docker
+*.pid
+*.seed
+*.pid.lock

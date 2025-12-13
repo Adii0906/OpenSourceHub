@@ -1,0 +1,463 @@
+id: ai-daily-scraper
+namespace: opensource
+
+description: |
+  🤖 WORKFLOW 1: Daily AI-Powered Program Discovery
+  - Scrapes actual web sources for open-source program data
+  - AI summarizes scraped content into structured card format
+  - Auto-adds new programs to programs.json
+  - Runs daily at 9 AM
+
+tasks:
+  # STEP 1: Fetch existing programs
+  - id: fetch-existing-programs
+    type: io.kestra.plugin.core.http.Request
+    uri: http://172.17.0.1:8000/programs
+    method: GET
+
+  # STEP 2: Search for upcoming open-source programs
+  - id: search-programs
+    type: io.kestra.plugin.scripts.python.Script
+    containerImage: python:3.11-slim
+    beforeCommands:
+      - pip install requests beautifulsoup4
+    outputFiles:
+      - program_urls.json
+    script: |
+      import requests
+      from bs4 import BeautifulSoup
+      import json
+      from urllib.parse import urlparse, parse_qs, unquote
+      
+      print("🔍 Searching for upcoming open-source programs...")
+      
+      # Search Google for upcoming programs
+      search_queries = [
+          "upcoming open source internship 2025",
+          "open source fellowship programs 2025",
+          "developer mentorship programs 2025"
+      ]
+      
+      found_programs = []
+      
+      # Use DuckDuckGo HTML search (doesn't require API)
+      for query in search_queries:
+          try:
+              url = f"https://html.duckduckgo.com/html/?q={query.replace(' ', '+')}"
+              headers = {'User-Agent': 'Mozilla/5.0'}
+              response = requests.get(url, headers=headers, timeout=10)
+              soup = BeautifulSoup(response.content, 'html.parser')
+              
+              # Extract search results
+              results = soup.find_all('a', class_='result__a')[:3]
+              
+              for result in results:
+                  program_url = result.get('href', '')
+                  program_title = result.get_text(strip=True)
+                  
+                  # Fix relative URLs from DuckDuckGo (add https: scheme)
+                  if program_url.startswith('//'):
+                      program_url = 'https:' + program_url
+                  
+                  # Extract actual URL from DuckDuckGo redirect
+                  if 'uddg=' in program_url:
+                      try:
+                          parsed = urlparse(program_url)
+                          params = parse_qs(parsed.query)
+                          if 'uddg' in params:
+                              program_url = unquote(params['uddg'][0])
+                      except:
+                          pass
+                  
+                  if program_url and 'http' in program_url:
+                      found_programs.append({
+                          "title": program_title,
+                          "url": program_url,
+                          "search_query": query
+                      })
+                      print(f"   ✓ Found: {program_title[:60]}")
+              
+              if len(found_programs) >= 3:
+                  break
+                  
+          except Exception as e:
+              print(f"   ✗ Search failed for '{query}': {e}")
+      
+      # Take first 3 unique programs
+      unique_programs = []
+      seen_urls = set()
+      for p in found_programs:
+          if p['url'] not in seen_urls:
+              unique_programs.append(p)
+              seen_urls.add(p['url'])
+          if len(unique_programs) >= 3:
+              break
+      
+      with open('program_urls.json', 'w') as f:
+          json.dump(unique_programs, f, indent=2)
+      
+      print(f"\n✅ Found {len(unique_programs)} programs to scrape")
+
+  # STEP 3: Scrape the found program websites
+  - id: scrape-web-sources
+    type: io.kestra.plugin.scripts.python.Script
+    containerImage: python:3.11-slim
+    beforeCommands:
+      - pip install requests beautifulsoup4
+    env:
+      PROGRAM_URLS: "{{ read(outputs['search-programs'].outputFiles['program_urls.json']) }}"
+    outputFiles:
+      - scraped_data.txt
+    script: |
+      import requests
+      from bs4 import BeautifulSoup
+      import json
+      import os
+      
+      print("🌐 Scraping found program websites...")
+      
+      program_urls = json.loads(os.environ['PROGRAM_URLS'])
+      scraped_content = []
+      
+      for program in program_urls:
+          try:
+              url = program['url']
+              title = program['title']
+              
+              print(f"\n📄 Scraping: {title}")
+              print(f"   URL: {url}")
+              
+              response = requests.get(url, timeout=15, headers={
+                  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+              }, allow_redirects=True)
+              
+              if response.status_code != 200:
+                  print(f"   ✗ HTTP {response.status_code}")
+                  continue
+              
+              soup = BeautifulSoup(response.content, 'html.parser')
+              
+              # Remove unwanted elements
+              for tag in soup(['script', 'style', 'nav', 'footer', 'header', 'aside']):
+                  tag.decompose()
+              
+              # Try to find main content areas first
+              main_content = None
+              for selector in ['main', 'article', '[role="main"]', '.content', '#content']:
+                  main_content = soup.select_one(selector)
+                  if main_content:
+                      break
+              
+              # Extract text from main content or whole page
+              if main_content:
+                  text = main_content.get_text(separator=' ', strip=True)
+              else:
+                  text = soup.get_text(separator=' ', strip=True)
+              
+              # Clean up extra whitespace and limit length
+              text = ' '.join(text.split())[:3000]
+              
+              if len(text) > 100:  # Only add if we got substantial content
+                  scraped_content.append({
+                      "title": title,
+                      "url": url,
+                      "content": text
+                  })
+                  print(f"   ✓ Scraped {len(text)} characters")
+              else:
+                  print(f"   ⚠️ Not enough content ({len(text)} chars)")
+              
+          except Exception as e:
+              print(f"   ✗ Failed: {e}")
+      
+      # Save all scraped content
+      output = {
+          "scraped_at": "2025-12-13",
+          "total_sources": len(scraped_content),
+          "sources": scraped_content
+      }
+      
+      with open('scraped_data.txt', 'w') as f:
+          json.dump(output, f, indent=2)
+      
+      print(f"\n✅ Scraped {len(scraped_content)} programs successfully")
+
+  # STEP 4: AI formats scraped data into card structure
+  - id: ai-analyze-programs
+    type: io.kestra.plugin.gemini.ChatCompletion
+    apiKey: AIzaSyAb9AHy07_7AQhb4on2H5VugOUMM-uRyTk
+    model: models/gemini-2.5-flash
+    allowFailure: true
+    messages:
+      - type: USER
+        content: |
+          You are an expert at extracting open-source program information from web content.
+          
+          SCRAPED WEB DATA:
+          {{ read(outputs['scrape-web-sources'].outputFiles['scraped_data.txt']) }}
+          
+          TASK: Extract ALL open-source programs mentioned in the scraped content above.
+          Look for programs like: Outreachy, GSoC, MLH Fellowship, LFX Mentorship, Hacktoberfest, etc.
+          
+          For EACH program you find, create a JSON object with these fields:
+          {
+            "name": "Full Program Name",
+            "slug": "program-name-in-lowercase-with-hyphens",
+            "difficulty": "beginner" or "intermediate" or "advanced",
+            "program_type": "Internship" or "Fellowship" or "Mentorship" or "Open Source",
+            "timeline": "3 months" or "Duration description",
+            "opens_in": "Month name" or "Rolling" or "Varies",
+            "deadline": "Deadline information" or "Varies yearly",
+            "description": "Brief 1-2 sentence description of what the program offers",
+            "official_site": "https://actual-program-website.com",
+            "tags": ["Paid", "Remote", "Global"] - always include these 3,
+            "tech": "web" or "mobile" or "devops" or "cloud" or "security" or "data"
+          }
+          
+          IMPORTANT INSTRUCTIONS:
+          - Extract AT LEAST 2-3 programs from the content
+          - If you see Outreachy mentioned, MUST include it
+          - Use actual details from the scraped text
+          - For missing info, make reasonable guesses based on typical open-source programs
+          - Include the official_site URL from the scraped data
+          
+          OUTPUT FORMAT:
+          Return ONLY a JSON array with NO markdown, NO code blocks, NO explanations:
+          [{"name":"Program1",...},{"name":"Program2",...}]
+
+  # STEP 5: Process AI response and add programs to backend
+  - id: add-to-scraper-file
+    type: io.kestra.plugin.scripts.python.Script
+    containerImage: python:3.11-slim
+    beforeCommands:
+      - pip install requests
+    env:
+      AI_RESPONSE: "{{ outputs['ai-analyze-programs'] | json }}"
+      SCRAPED_DATA: "{{ read(outputs['scrape-web-sources'].outputFiles['scraped_data.txt']) }}"
+    script: |
+      import json
+      import sys
+      import os
+      import requests
+      
+      # Get AI response (may be empty if task failed)
+      ai_response_str = os.environ.get('AI_RESPONSE', '{}')
+      
+      # Check if AI task failed (empty or null response)
+      ai_failed = False
+      try:
+          ai_response = json.loads(ai_response_str) if ai_response_str and ai_response_str != 'null' else {}
+          ai_content = ai_response.get('text', ai_response.get('content', '')).strip()
+          
+          if not ai_content:
+              print("⚠️ AI task failed or returned empty")
+              ai_failed = True
+          else:
+              print("🤖 AI Raw Response:")
+              print(ai_content[:500])
+      except Exception as e:
+          print(f"⚠️ AI response error: {e}")
+          ai_failed = True
+          ai_content = ''
+      
+      # Clean markdown if present
+      if ai_content and "```json" in ai_content:
+          ai_content = ai_content.split("```json")[1].split("```")[0]
+      elif ai_content and "```" in ai_content:
+          ai_content = ai_content.split("```")[1].split("```")[0]
+      
+      # Parse new programs (will be empty if AI failed)
+      new_programs = []
+      if not ai_failed and ai_content:
+          try:
+              new_programs = json.loads(ai_content.strip())
+              print(f"\n✅ AI discovered {len(new_programs)} programs")
+          except Exception as e:
+              print(f"❌ Failed to parse AI response: {e}")
+              new_programs = []
+      
+      # FALLBACK: If AI returns empty, parse scraped data manually
+      if not new_programs:
+          print("\n🔄 FALLBACK: AI returned empty, parsing scraped data manually...")
+          
+          # Read the scraped data
+          scraped_data = json.loads(os.environ.get('SCRAPED_DATA', '{}'))
+          
+          new_programs = []
+          seen_programs = set()
+          
+          # Scan ALL content for multiple programs mentioned
+          all_sources = scraped_data.get('sources', [])
+          all_content_combined = ' '.join([s.get('content', '') + ' ' + s.get('title', '') for s in all_sources]).lower()
+          
+          # Program detection based on URL match first, then content
+          program_candidates = [
+              ('outreachy.org', 'Outreachy', 'outreachy', 'beginner', 'Internship', '3 months', 
+               'February and August', 'Varies by round',
+               'Paid remote internships for people from underrepresented groups in tech.',
+               'https://www.outreachy.org/', ['Paid', 'Remote', 'Global'], 'web'),
+              
+              ('fellowship.mlh.io', 'MLH Fellowship', 'mlh-fellowship', 'intermediate', 'Fellowship', '12 weeks',
+               'Rolling', 'Applications open year-round',
+               'Remote software engineering internship alternative with Open Source projects.',
+               'https://fellowship.mlh.io/', ['Paid', 'Remote', 'Global'], 'web'),
+              
+              ('lfx.linuxfoundation.org', 'LFX Mentorship', 'lfx-mentorship', 'intermediate', 'Mentorship', '12 weeks',
+               'March, June, September', 'Varies by term',
+               'Linux Foundation mentorship connecting developers with open source projects.',
+               'https://lfx.linuxfoundation.org/tools/mentorship/', ['Paid', 'Remote', 'Global'], 'devops'),
+              
+              ('summerofcode.withgoogle.com', 'Google Summer of Code', 'gsoc', 'intermediate', 'Internship', '3 months',
+               'March', 'April',
+               'Google sponsors students to work with open source organizations.',
+               'https://summerofcode.withgoogle.com/', ['Paid', 'Remote', 'Global'], 'web'),
+              
+              ('hacktoberfest.com', 'Hacktoberfest', 'hacktoberfest', 'beginner', 'Open Source', 'October 1-31',
+               'October', 'October 31',
+               'Month-long celebration of open source with rewards for pull requests.',
+               'https://hacktoberfest.com/', ['Remote', 'Global'], 'web'),
+              
+              ('developers.google.com/season-of-docs', 'Google Season of Docs', 'google-season-of-docs', 'intermediate', 
+               'Mentorship', '3-6 months', 'February', 'April',
+               'Bringing technical writers and open source projects together.',
+               'https://developers.google.com/season-of-docs', ['Paid', 'Remote', 'Global'], 'web'),
+          ]
+          
+          # First pass: Check if source URL directly matches a program
+          for source in all_sources:
+              url = source.get('url', '').lower()
+              for prog in program_candidates:
+                  if prog[0] in url and prog[1] not in seen_programs:
+                      new_programs.append({
+                          'name': prog[1], 'slug': prog[2], 'difficulty': prog[3],
+                          'program_type': prog[4], 'timeline': prog[5], 'opens_in': prog[6],
+                          'deadline': prog[7], 'description': prog[8], 'official_site': prog[9],
+                          'tags': prog[10], 'tech': prog[11]
+                      })
+                      seen_programs.add(prog[1])
+                      print(f"   ✅ Detected from URL: {prog[1]}")
+          
+          # Second pass: Scan combined content for programs mentioned (if URL match didn't work)
+          if len(new_programs) < 2:
+              content_keywords = [
+                  ('google summer of code', 'Google Summer of Code', 2),
+                  ('outreachy', 'Outreachy', 0),
+                  ('mlh fellowship', 'MLH Fellowship', 1),
+                  ('major league hacking', 'MLH Fellowship', 1),
+                  ('lfx mentorship', 'LFX Mentorship', 2),
+                  ('linux foundation mentorship', 'LFX Mentorship', 2),
+                  ('hacktoberfest', 'Hacktoberfest', 4),
+                  ('season of docs', 'Google Season of Docs', 5),
+              ]
+              
+              for keyword, prog_name, prog_idx in content_keywords:
+                  if keyword in all_content_combined and prog_name not in seen_programs:
+                      prog = program_candidates[prog_idx]
+                      new_programs.append({
+                          'name': prog[1], 'slug': prog[2], 'difficulty': prog[3],
+                          'program_type': prog[4], 'timeline': prog[5], 'opens_in': prog[6],
+                          'deadline': prog[7], 'description': prog[8], 'official_site': prog[9],
+                          'tags': prog[10], 'tech': prog[11]
+                      })
+                      seen_programs.add(prog_name)
+                      print(f"   ✅ Detected from content: {prog_name}")
+          
+          print(f"\n✅ Fallback parsed {len(new_programs)} unique programs from scraped data")
+          
+          print(f"\n✅ Fallback parsed {len(new_programs)} unique programs from scraped data")
+      
+      # Load existing programs from backend
+      try:
+          response = requests.get('http://172.17.0.1:8000/programs', timeout=10)
+          existing_programs = response.json()
+          print(f"📊 Existing programs: {len(existing_programs)}")
+      except Exception as e:
+          print(f"⚠️ Could not load existing programs: {e}")
+          existing_programs = []
+      
+      # Get max ID
+      max_id = max([p.get('id', 0) for p in existing_programs], default=0)
+      
+      # Validate and add IDs
+      valid_programs = []
+      for idx, program in enumerate(new_programs):
+          program['id'] = max_id + idx + 1
+          
+          required = ['name', 'slug', 'difficulty', 'program_type', 'timeline',
+                     'opens_in', 'deadline', 'description', 'official_site', 'tags', 'tech']
+          
+          if all(field in program for field in required):
+              valid_programs.append(program)
+              print(f"   ✓ {program['name']} (ID: {program['id']})")
+          else:
+              missing = [f for f in required if f not in program]
+              print(f"   ✗ Skipped {program.get('name', 'Unknown')}: missing {missing}")
+      
+      if not valid_programs:
+          print("❌ No valid programs to add")
+          with open('result.json', 'w') as f:
+              json.dump({"status": "no_valid_programs", "programs_added": 0}, f, indent=2)
+          sys.exit(0)
+      
+      # Save to backend using new endpoint
+      print(f"\n📤 Sending {len(valid_programs)} programs to backend...")
+      try:
+          response = requests.post(
+              'http://172.17.0.1:8000/admin/add-programs',
+              json={'programs': valid_programs},
+              timeout=10
+          )
+          
+          if response.status_code == 200:
+              result = response.json()
+              print(f"✅ Backend response: {result}")
+              
+              with open('result.json', 'w') as f:
+                  json.dump(result, f, indent=2)
+              
+              with open('new_programs.json', 'w') as f:
+                  json.dump(valid_programs, f, indent=2)
+          else:
+              print(f"❌ Backend error: {response.status_code}")
+              with open('result.json', 'w') as f:
+                  json.dump({"status": "backend_error", "code": response.status_code}, f, indent=2)
+              
+      except Exception as e:
+          print(f"❌ Request failed: {e}")
+          with open('result.json', 'w') as f:
+              json.dump({"status": "request_failed", "error": str(e)}, f, indent=2)
+    outputFiles:
+      - new_programs.json
+      - result.json
+
+  # STEP 6: Execution summary
+  - id: execution-summary
+    type: io.kestra.plugin.scripts.python.Script
+    containerImage: python:3.11-slim
+    script: |
+      import json
+      
+      result = """{{ read(outputs['add-to-scraper-file'].outputFiles['result.json']) }}"""
+      result_data = json.loads(result)
+      
+      print("\n" + "="*60)
+      print("📊 AI DAILY SCRAPER SUMMARY")
+      print("="*60)
+      
+      if result_data.get('status') == 'success':
+          print(f"✅ Programs added: {result_data.get('programs_added', 0)}")
+          print(f"✅ Total programs: {result_data.get('total_programs', 0)}")
+          print(f"\nNew programs:")
+          for name in result_data.get('new_program_names', []):
+              print(f"   • {name}")
+      else:
+          print(f"⚠️ Status: {result_data.get('status', 'unknown')}")
+          if 'error' in result_data:
+              print(f"Error: {result_data['error']}")
+      
+      print("="*60)
+
+# triggers:
+#   - id: daily-schedule
+#     type: io.kestra.plugin.core.trigger.Schedule
+#     cron: "0 0 * * *"  # Daily at 12 AM (midnight)

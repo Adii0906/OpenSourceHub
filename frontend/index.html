@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>OpenSource Programs</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="stylesheet" href="styles.css" />
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/animejs/3.2.1/anime.min.js"></script>
+</head>
+<body>
+  <div class="page-root">
+
+    <!-- Navigation Bar -->
+    <nav class="navbar">
+      <div class="navbar-container">
+        <div class="navbar-logo">
+          <span class="logo-icon">🚀</span>
+          <span class="logo-text">OpenSourceHub</span>
+        </div>
+        <ul class="navbar-menu">
+          <li><a href="#hero-section" class="nav-link">Home</a></li>
+          <li><a href="#about-section" class="nav-link">About</a></li>
+          <li><a href="#programs-section" class="nav-link">Explore Programs</a></li>
+          <li><a href="#subscribe-section" class="nav-link">Subscribe</a></li>
+          <li><button class="nav-link nav-ai-mentor-btn" id="navbar-ai-mentor">AI Mentor</button></li>
+        </ul>
+      </div>
+    </nav>
+
+    <!-- AI Mentor Sidebar -->
+    <div class="ai-mentor-sidebar" id="ai-mentor-sidebar">
+      <div class="sidebar-header">
+        <h3>AI Mentor</h3>
+        <button class="sidebar-close" id="sidebar-close">✕</button>
+      </div>
+      <div id="sidebar-messages" class="sidebar-messages"></div>
+      <div class="sidebar-input-area">
+        <input
+          type="text"
+          id="sidebar-agent-input"
+          class="sidebar-input"
+          placeholder="Ask about programs, deadlines, or get recommendations..."
+          autocomplete="off"
+        />
+        <button class="sidebar-send-btn" id="sidebar-send">➤</button>
+      </div>
+    </div>
+
+    <!-- Sidebar overlay -->
+    <div class="sidebar-overlay" id="sidebar-overlay"></div>
+
+    <!-- Landing / hero -->
+    <section class="hero-landing" id="hero-section">
+      <div class="hero-content">
+        <div class="hero-grid">
+          <div class="hero-main">
+            <h1 class="hero-title">
+              Discover every open‑source program <span id="typewriter" class="typewriter" aria-live="polite"><span class="tw-text" aria-hidden="false"></span><span class="tw-cursor" aria-hidden="true"></span></span>
+            </h1>
+            <p class="hero-subtitle">
+              Discover vetted open‑source programs. Filter by category, difficulty level, and apply on time.
+            </p>
+
+            <div class="hero-cta-group">
+              <button class="hero-cta" id="scroll-programs">
+                <span>Explore Programs</span>
+              </button>
+              <button class="hero-cta hero-cta-secondary" id="scroll-chat">
+                <span>Chat with AI Mentor</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Features Section -->
+    <section class="about-section" id="about-section">
+      <div class="about-content">
+        <div class="about-opensource">
+          <h2 class="about-opensource-title">
+            Powered by<img src="https://kestra.io/logo.svg" alt="Kestra" class="kestra-logo" />
+          </h2>
+          <p class="about-text">
+            Our platform uses cutting-edge Kestra in-built AI agent and automated workflows to discover, analyze, and curate open-source programs from across the web—so you don't have to
+          </p>
+          <div class="opensource-benefits">
+            <div class="benefit-item">
+              <div class="benefit-icon">🔍</div>
+              <h4>AI Web Scraping</h4>
+              <p>Automatically discovers new programs daily</p>
+            </div>
+            <div class="benefit-item">
+              <div class="benefit-icon">🤖</div>
+              <h4>Smart Analysis</h4>
+              <p>AI extracts and formats program details</p>
+            </div>
+            <div class="benefit-item">
+              <div class="benefit-icon">🎯</div>
+              <h4>Duplicate Detection</h4>
+              <p>Intelligent filtering prevents duplicates</p>
+            </div>
+            <div class="benefit-item">
+              <div class="benefit-icon">📧</div>
+              <h4>Smart Reminders</h4>
+              <p>AI selects high-impact programs for you</p>
+            </div>
+          </div>
+        </div>
+        <div class="about-features">
+          <div class="feature-card">
+            <div class="feature-icon">🌐</div>
+            <h3>Real-Time Updates</h3>
+            <p>Database updates automatically via Kestra workflows</p>
+          </div>
+          <div class="feature-card">
+            <div class="feature-icon">💬</div>
+            <h3>AI Mentor Chat</h3>
+            <p>Get personalized recommendations and deadline reminders</p>
+          </div>
+          <div class="feature-card ai-mentor-card">
+            <div class="feature-icon">⚡</div>
+            <h3>Zero Manual Work</h3>
+            <p>Fully automated discovery and notifications</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <main class="content-surface">
+      <!-- Upcoming programs / filters -->
+      <section class="programs-wrapper" id="programs-section">
+        <header class="programs-header">
+          <h2>Upcoming Programs</h2>
+          <p>
+            Discover and apply to amazing open‑source programs from around the world.
+          </p>
+        </header>
+
+        <div class="filter-card">
+          <div class="filter-title-row">
+            <div class="filter-icon">⌂</div>
+            <div class="filter-title-text">
+              <h3>Filter Programs</h3>
+            </div>
+          </div>
+
+          <div class="filter-grid">
+            <div class="filter-group">
+              <label>Category</label>
+              <div class="filter-select-row">
+                <button class="filter-chip tech-filter active" data-tech="">All Categories</button>
+                <button class="filter-chip tech-filter" data-tech="security">Security</button>
+                <button class="filter-chip tech-filter" data-tech="ai">AI/ML</button>
+                <button class="filter-chip tech-filter" data-tech="web">Web Dev</button>
+                <button class="filter-chip tech-filter" data-tech="mobile">Mobile</button>
+                <button class="filter-chip tech-filter" data-tech="cloud">Cloud</button>
+                <button class="filter-chip tech-filter" data-tech="devops">DevOps</button>
+              </div>
+            </div>
+            <div class="filter-group">
+              <label>Difficulty</label>
+              <div class="filter-select-row">
+                <button class="filter-chip difficulty-filter active" data-difficulty="">All Levels</button>
+                <button class="filter-chip difficulty-filter" data-difficulty="beginner">Beginner</button>
+                <button class="filter-chip difficulty-filter" data-difficulty="intermediate">Intermediate</button>
+                <button class="filter-chip difficulty-filter" data-difficulty="advanced">Advanced</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div id="programs-grid" class="programs-grid">
+          <!-- Program cards rendered by app.js -->
+        </div>
+      </section>
+
+      <!-- Subscribe card -->
+      <section class="subscribe-card-section" id="subscribe-section">
+        <div class="subscribe-card">
+          <div class="subscribe-icon-wrap">
+            <div class="subscribe-icon">🔔</div>
+          </div>
+          <h2>Subscribe Now</h2>
+          <p>Just enter your email and stay updated with the latest open-source programs.</p>
+          <form id="subscribe-form" class="subscribe-form">
+            <input
+              type="email"
+              id="subscribe-email"
+              placeholder="Enter your email"
+              required
+            />
+            <button type="submit">
+              <span class="subscribe-btn-icon">🔔</span>
+              <span>Subscribe</span>
+            </button>
+          </form>
+          <div id="subscribe-status" class="subscribe-status"></div>
+        </div>
+      </section>
+    </main>
+
+    <!-- Footer -->
+    <footer class="site-footer">
+      <p class="footer-copyright">© 2025 OpenSourceHub. All rights reserved.</p>
+    </footer>
+
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

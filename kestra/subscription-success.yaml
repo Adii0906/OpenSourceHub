@@ -1,0 +1,92 @@
+id: subscription-success
+namespace: opensource
+description: "Send a confirmation email when a user subscribes via the website"
+inputs:
+  - id: email
+    type: STRING
+  - id: status
+    type: STRING
+  - id: note
+    type: STRING
+
+tasks:
+  # STEP 1: Fetch some programs to show
+  - id: fetch-programs
+    type: io.kestra.plugin.core.http.Request
+    uri: http://172.17.0.1:8000/programs
+    method: GET
+
+  # STEP 2: Send email with program recommendations
+  - id: send-email
+    type: io.kestra.plugin.scripts.python.Script
+    description: Send subscription confirmation email via SMTP
+    env:
+      PROGRAMS_DATA: "{{ outputs['fetch-programs'].body }}"
+      USER_EMAIL: "{{ inputs.email }}"
+    script: |
+      import os
+      import json
+      import smtplib
+      from email.message import EmailMessage
+
+      # Get inputs
+      email = os.environ['USER_EMAIL']
+      programs = json.loads(os.environ['PROGRAMS_DATA'])
+
+      # Pick 3-4 programs to recommend
+      recommended = programs[:4] if len(programs) >= 4 else programs
+      
+      # Build program list HTML
+      programs_html = ""
+      for prog in recommended:
+          programs_html += f"<li><strong>{prog.get('name', 'Program')}</strong></li>\n"
+
+      # Build HTML email
+      html = f"""
+      <html>
+        <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+          <p>Hi,</p>
+          <p>Thanks for subscribing to OpenSource Programs updates. We've recorded your email: <strong>{email}</strong>.</p>
+          <p>We'll notify you about new and urgent programs that match our criteria.</p>
+          
+          <h3>Here are some upcoming programs:</h3>
+          <ul style="list-style: none; padding-left: 0;">
+            {programs_html}
+          </ul>
+          
+          <a href="http://localhost:8000/#programs-section" style="display: inline-block; background: #667eea; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; margin-top: 10px;">
+            Explore All Programs →
+          </a>
+          
+          <p style="margin-top: 30px;">— OpenSource Programs Team</p>
+        </body>
+      </html>
+      """
+
+      # SMTP configuration
+      smtp_host = os.getenv('SMTP_HOST')
+      smtp_port = int(os.getenv('SMTP_PORT', '587'))
+      smtp_user = os.getenv('SMTP_USER')
+      smtp_pass = os.getenv('SMTP_PASS')
+      from_email = os.getenv('FROM_EMAIL', 'noreply@example.com')
+
+      # Create and send email
+      msg = EmailMessage()
+      msg['Subject'] = 'Subscription Confirmed - OpenSource Programs'
+      msg['From'] = from_email
+      msg['To'] = email
+      msg.set_content('This message requires an HTML-capable email client.')
+      msg.add_alternative(html, subtype='html')
+
+      if not smtp_host:
+          raise RuntimeError('SMTP_HOST not configured')
+
+      with smtplib.SMTP(smtp_host, smtp_port) as s:
+          s.starttls()
+          if smtp_user and smtp_pass:
+              s.login(smtp_user, smtp_pass)
+          s.send_message(msg)
+      
+      print(f"Email sent successfully to {email}")
+
+    runner: PROCESS
