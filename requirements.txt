@@ -1,0 +1,9 @@
+fastapi
+uvicorn[standard]
+pydantic
+google-adk
+python-dotenv
+requests
+beautifulsoup4
+email-validator
+python-dateutil
