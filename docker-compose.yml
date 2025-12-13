@@ -1,0 +1,50 @@
+version: '3.8'
+
+services:
+  kestra:
+    image: kestra/kestra:latest
+    container_name: kestra
+    command: server standalone --worker-thread=128
+    user: "root"
+    ports:
+      - "8080:8080"
+    environment:
+      # SMTP Configuration
+      SMTP_HOST: smtp.gmail.com
+      SMTP_PORT: 587
+      SMTP_USER: "Your email here"
+      SMTP_PASS: "Your app password"
+      FROM_EMAIL: "OpenSource Team <HelloFriend!>"
+      ADMIN_EMAIL: "Your admin email here"
+      
+      # AI Configuration
+      GOOGLE_API_KEY: AIzaSyAb9AHy07_7AQhb4on2H5VugOUMM-uRyTk
+      
+      # Kestra configuration
+      KESTRA_CONFIGURATION: |
+        kestra:
+          storage:
+            type: local
+            local:
+              basePath: /app/data
+          repository:
+            type: h2
+            h2:
+              url: jdbc:h2:/app/data/kestra;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE
+          queue:
+            type: h2
+          server:
+            basic-auth:
+              enabled: false
+          security:
+            enabled: false
+      
+      # Additional override to ensure basic auth is disabled
+      MICRONAUT_SECURITY_ENABLED: "false"
+    volumes:
+      - kestra-data:/app/data
+      - /var/run/docker.sock:/var/run/docker.sock
+    restart: unless-stopped
+
+volumes:
+  kestra-data:

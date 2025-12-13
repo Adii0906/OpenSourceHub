@@ -1,0 +1,245 @@
+id: ai-smart-reminders
+namespace: opensource
+
+description: |
+  🤖 WORKFLOW: Smart High-Impact Program Reminders
+
+tasks:
+  - id: fetch-all-programs
+    type: io.kestra.plugin.core.http.Request
+    uri: http://172.17.0.1:8000/programs
+    method: GET
+
+  - id: fetch-new-programs
+    type: io.kestra.plugin.core.http.Request
+    uri: http://172.17.0.1:8000/admin/latest-additions
+    method: GET
+
+  - id: fetch-subscribers
+    type: io.kestra.plugin.core.http.Request
+    uri: http://172.17.0.1:8000/subscribers
+    method: GET
+
+  - id: prepare-reminder-data
+    type: io.kestra.plugin.scripts.python.Script
+    containerImage: python:3.11-slim
+    env:
+      ALL_PROGRAMS: "{{ outputs['fetch-all-programs'].body }}"
+      NEW_PROGRAMS: "{{ outputs['fetch-new-programs'].body }}"
+    outputFiles:
+      - ai_input.txt
+    script: |
+      import json, os
+      from datetime import datetime
+
+      all_programs = json.loads(os.environ['ALL_PROGRAMS'])
+      new_programs = json.loads(os.environ['NEW_PROGRAMS'])
+
+      prompt = f"""
+      Today is {datetime.now().date()}.
+
+      You are given a list of programs as JSON.
+
+      RULES (VERY IMPORTANT):
+      - Return ONLY a JSON array of NUMBERS
+      - No text, no markdown, no explanation
+      - Example output: [1, 4, 7]
+
+      Select program IDs IF:
+      - tags include "Paid"
+      OR
+      - name contains (case-insensitive):
+        "Google Summer of Code"
+        "GSoC"
+        "Outreachy"
+        "Google Season of Docs"
+        "Linux Foundation"
+
+      Programs JSON:
+      {json.dumps(all_programs)}
+      """
+
+      open("ai_input.txt", "w").write(prompt)
+
+  # 🔥 AI: Choose top 3 most impactful programs by NAME
+  - id: ai-smart-analysis
+    type: io.kestra.plugin.gemini.ChatCompletion
+    apiKey: AIzaSyAb9AHy07_7AQhb4on2H5VugOUMM-uRyTk
+    model: models/gemini-2.5-flash
+    allowFailure: true
+    messages:
+      - type: USER
+        content: |
+          You are an AI that identifies the TOP 3 MOST IMPACTFUL open-source programs for developers.
+          
+          HIGH-IMPACT CRITERIA:
+          • Paid/Stipend programs (GSoC, Outreachy, Linux Foundation, etc.)
+          • Well-known prestigious programs
+          • Career-boosting opportunities
+          
+          AVAILABLE PROGRAMS:
+          - Google Summer of Code (GSoC)
+          - GirlScript Summer of Code (GSSoC)
+          - Hacktoberfest
+          - Outreachy
+          - Google Season of Docs
+          - Linux Foundation Mentorship Program
+          
+          INSTRUCTIONS:
+          Return EXACTLY 3 program names as a JSON array of strings.
+          Use the EXACT names from the list above.
+          
+          OUTPUT FORMAT:
+          ["Program Name 1", "Program Name 2", "Program Name 3"]
+          
+          NO explanations, NO markdown, ONLY the JSON array.
+
+  - id: generate-email-html
+    type: io.kestra.plugin.scripts.python.Script
+    containerImage: python:3.11-slim
+    env:
+      AI_RESPONSE: "{{ outputs['ai-smart-analysis'] | json }}"
+      ALL_PROGRAMS: "{{ outputs['fetch-all-programs'].body }}"
+      SUBSCRIBERS: "{{ outputs['fetch-subscribers'].body }}"
+    outputFiles:
+      - email.html
+      - send_flag.txt
+    script: |
+      import json, os, sys
+
+      ai_response = json.loads(os.environ['AI_RESPONSE'])
+      all_programs = json.loads(os.environ['ALL_PROGRAMS'])
+      subscribers = json.loads(os.environ['SUBSCRIBERS'])
+      
+      # Extract AI text response
+      ai_text = ai_response.get('text', ai_response.get('content', '[]')).strip()
+      print(f"🤖 AI Raw Response: {ai_text[:300]}")
+      
+      # Clean markdown if present
+      if '```json' in ai_text:
+          ai_text = ai_text.split('```json')[1].split('```')[0]
+      elif '```' in ai_text:
+          ai_text = ai_text.split('```')[1].split('```')[0]
+      
+      # Parse program names from AI
+      try:
+          selected_names = json.loads(ai_text.strip())
+          print(f"✅ AI selected {len(selected_names)} programs: {selected_names}")
+      except:
+          print(f"❌ Failed to parse AI response, using fallback")
+          selected_names = ["Google Summer of Code (GSoC)", "Outreachy", "Linux Foundation Mentorship Program"]
+      
+      # Match names to full program details
+      selected_programs = []
+      for name in selected_names:
+          for p in all_programs:
+              if p['name'].lower() == name.lower() or name.lower() in p['name'].lower():
+                  selected_programs.append(p)
+                  break
+      
+      # Fallback: if AI failed, use paid programs
+      if not selected_programs:
+          print("⚠️ No matches found, using paid programs fallback")
+          selected_programs = [p for p in all_programs if 'Paid' in p.get('tags', [])][:3]
+
+      if not selected_programs:
+          print("❌ No programs to send - exiting")
+          open("send_flag.txt","w").write("false")
+          open("email.html","w").write("<p>No reminders today</p>")
+          sys.exit(0)
+
+      print(f"\n📧 Sending emails for:")
+      for p in selected_programs:
+          print(f"   • {p['name']}")
+      
+      # Generate email HTML
+      html_parts = []
+      html_parts.append('<!DOCTYPE html>')
+      html_parts.append('<html><head><style>')
+      html_parts.append('body { font-family: Arial, sans-serif; background: #f9fafb; margin: 0; padding: 20px; }')
+      html_parts.append('.container { max-width: 600px; margin: 0 auto; background: white; border-radius: 8px; overflow: hidden; }')
+      html_parts.append('.header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 40px 20px; text-align: center; }')
+      html_parts.append('.content { padding: 30px; }')
+      html_parts.append('.program-card { background: #f0f9ff; border-left: 4px solid #3b82f6; padding: 20px; margin: 20px 0; border-radius: 8px; }')
+      html_parts.append('.program-name { font-size: 20px; font-weight: bold; color: #1e40af; margin-bottom: 10px; }')
+      html_parts.append('.program-desc { color: #374151; line-height: 1.6; margin-bottom: 15px; }')
+      html_parts.append('.cta-btn { display: inline-block; background: #667eea; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; margin-top: 10px; }')
+      html_parts.append('.cta-btn:hover { background: #5568d3; }')
+      html_parts.append('</style></head><body>')
+      html_parts.append('<div class="container">')
+      html_parts.append('<div class="header"><h1>🔥 Top High-Impact Programs!</h1></div>')
+      html_parts.append('<div class="content">')
+      html_parts.append('<p>Hi! 👋</p>')
+      html_parts.append(f'<p>Our AI identified <strong>{len(selected_programs)} high-impact programs</strong> you should know about:</p>')
+      
+      for p in selected_programs:
+          desc = p.get('description', 'No description available')[:200]
+          tags = ', '.join(p.get('tags', []))
+          html_parts.append('<div class="program-card">')
+          html_parts.append(f'<div class="program-name">{p["name"]}</div>')
+          html_parts.append(f'<div class="program-desc">{desc}...</div>')
+          if tags:
+              html_parts.append(f'<div style="color: #6b7280; font-size: 14px; margin-bottom: 10px;">🏷️ {tags}</div>')
+          html_parts.append('<a href="http://localhost:8000/#programs-section" class="cta-btn">Learn More →</a>')
+          html_parts.append('</div>')
+      
+      html_parts.append('<p style="margin-top: 30px; color: #6b7280; font-size: 14px;">Stay tuned for more opportunities!</p>')
+      html_parts.append('</div></div></body></html>')
+      html = ''.join(html_parts)
+      
+      open("send_flag.txt","w").write("true")
+      open("email.html","w").write(html)
+      print(f"\n✅ Email HTML generated for {len(subscribers)} subscribers")
+
+  - id: send-to-subscribers
+    type: io.kestra.plugin.core.flow.If
+    condition: "{{ read(outputs['generate-email-html'].outputFiles['send_flag.txt']) == 'true' }}"
+    then:
+      - id: send-mails-loop
+        type: io.kestra.plugin.core.flow.ForEach
+        values: "{{ outputs['fetch-subscribers'].body }}"
+        tasks:
+          - id: send-mail
+            type: io.kestra.plugin.notifications.mail.MailSend
+            from: sagarsthakuri188@gmail.com
+            to: "{{ taskrun.value }}"
+            subject: "🔥 High-Impact Programs"
+            htmlTextContent: "{{ read(outputs['generate-email-html'].outputFiles['email.html']) }}"
+            host: smtp.gmail.com
+            port: 587
+            username: sagarsthakuri188@gmail.com
+            password: "btqm tmao xzxb erxu"
+            transportStrategy: SMTP_TLS
+    else:
+      - id: log-no-send
+        type: io.kestra.plugin.core.log.Log
+        message: "❌ NO EMAILS SENT - AI found no high-impact programs"
+
+  - id: execution-summary
+    type: io.kestra.plugin.scripts.python.Script
+    containerImage: python:3.11-slim
+    script: |
+      import os
+      
+      send_flag = """{{ read(outputs['generate-email-html'].outputFiles['send_flag.txt']) }}"""
+      
+      print("\n" + "="*60)
+      print("📊 EXECUTION SUMMARY")
+      print("="*60)
+      
+      if send_flag == 'true':
+          subscribers = {{ outputs['fetch-subscribers'].body }}
+          print(f"✅ SUCCESS: AI identified high-impact programs")
+          print(f"✅ Emails SENT to {len(subscribers)} subscribers:")
+          for email in subscribers:
+              print(f"   📧 {email}")
+      else:
+          print("❌ NO EMAILS SENT")
+          print("Reason: AI did not identify any high-impact programs")
+      
+      print("="*60)
+
+# triggers:
+#   - id: daily-schedule
+#     type: io.kestra.plugin.core.trigger.Schedule
+#     cron: "0 0 * * *"  # Daily at 12 AM (midnight)

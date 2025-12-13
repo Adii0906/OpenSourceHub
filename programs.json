@@ -14,7 +14,8 @@
       "Paid",
       "Remote",
       "Global"
-    ]
+    ],
+    "tech": "web"
   },
   {
     "id": 3,
@@ -30,7 +31,8 @@
     "tags": [
       "Remote",
       "Global"
-    ]
+    ],
+    "tech": "web"
   },
   {
     "id": 4,
@@ -46,7 +48,8 @@
     "tags": [
       "Remote",
       "Global"
-    ]
+    ],
+    "tech": "devops"
   },
   {
     "id": 6,
@@ -63,7 +66,8 @@
       "Paid",
       "Diversity",
       "Remote"
-    ]
+    ],
+    "tech": "web"
   },
   {
     "id": 7,
@@ -80,13 +84,14 @@
       "Paid",
       "Remote",
       "Global"
-    ]
+    ],
+    "tech": "cloud"
   },
   {
     "id": 8,
     "name": "Linux Foundation Mentorship Program",
     "slug": "lf-mentorship",
-    "difficulty": "intermediate",
+    "difficulty": "advanced",
     "program_type": "Internship",
     "timeline": "Multiple cohorts throughout the year",
     "opens_in": "Varies",
@@ -97,6 +102,43 @@
       "Paid",
       "Remote",
       "Global"
-    ]
+    ],
+    "tech": "security"
+  },
+  {
+    "name": "LFX Mentorship",
+    "slug": "lfx-mentorship",
+    "difficulty": "intermediate",
+    "program_type": "Mentorship",
+    "timeline": "12 weeks",
+    "opens_in": "March, June, September",
+    "deadline": "Varies by term",
+    "description": "Linux Foundation mentorship connecting developers with open source projects.",
+    "official_site": "https://lfx.linuxfoundation.org/tools/mentorship/",
+    "tags": [
+      "Paid",
+      "Remote",
+      "Global"
+    ],
+    "tech": "security",
+    "id": 10
+  },
+  {
+    "name": "MLH Fellowship",
+    "slug": "mlh-fellowship",
+    "difficulty": "intermediate",
+    "program_type": "Fellowship",
+    "timeline": "12 weeks",
+    "opens_in": "Rolling",
+    "deadline": "Applications open year-round",
+    "description": "Remote software engineering internship alternative with Open Source projects.",
+    "official_site": "https://fellowship.mlh.io/",
+    "tags": [
+      "Paid",
+      "Remote",
+      "Global"
+    ],
+    "tech": "web",
+    "id": 11
   }
 ]

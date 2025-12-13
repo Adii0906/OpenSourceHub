@@ -14,6 +14,7 @@ class Program(BaseModel):
     description: str
     official_site: str
     tags: List[str] = []
+    tech: Optional[str] = None  # Technology category: security, ai, web, mobile, cloud, devops
 
 
 class AgentQuery(BaseModel):
