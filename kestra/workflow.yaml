@@ -1,0 +1,119 @@
+id: update-programs-daily
+namespace: opensource
+
+description: "Daily workflow to scrape and update open-source programs data"
+
+inputs:
+  - id: project_root
+    type: STRING
+    defaults: "/app"  # Default for Docker, can be overridden
+
+tasks:
+  - id: scrape-programs
+    type: io.kestra.plugin.scripts.python.Script
+    description: Scrape open-source program data from the web and generate programs.json
+    script: |
+      import sys
+      import os
+      from pathlib import Path
+
+      # Get the project root - use input parameter or default
+      project_root = Path("{{ inputs.project_root }}") if "{{ inputs.project_root }}" != "/app" else Path(__file__).resolve().parent.parent
+
+      # Ensure we're in the right directory
+      os.chdir(project_root)
+      sys.path.insert(0, str(project_root))
+
+      print(f"Working directory: {os.getcwd()}")
+      print(f"Project root: {project_root}")
+
+      # Import and run the scraper
+      try:
+          from scraper.scrape_programs import main
+          main()
+          print("✓ Scraping completed successfully")
+      except Exception as e:
+          print(f"✗ Error during scraping: {e}")
+          # Don't exit - let validation task handle it
+          raise e
+    requirements:
+      - requests>=2.25.0
+      - beautifulsoup4>=4.9.0
+    runner: PROCESS
+    env:
+      PYTHONUNBUFFERED: "1"
+
+  - id: validate-and-backup
+    type: io.kestra.plugin.scripts.python.Script
+    description: Validate JSON and create backup of programs data
+    script: |
+      import sys
+      import os
+      import json
+      import shutil
+      from pathlib import Path
+      from datetime import datetime
+
+      # Get the project root
+      project_root = Path("{{ inputs.project_root }}") if "{{ inputs.project_root }}" != "/app" else Path(__file__).resolve().parent.parent
+      os.chdir(project_root)
+
+      json_path = project_root / "programs.json"
+
+      if json_path.exists():
+          # Validate JSON
+          try:
+              with open(json_path, 'r', encoding='utf-8') as f:
+                  data = json.load(f)
+              print(f"✓ JSON is valid. Found {len(data)} programs.")
+
+              # Create backup with timestamp
+              timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+              backup_path = project_root / f"programs_backup_{timestamp}.json"
+              shutil.copy2(json_path, backup_path)
+              print(f"✓ Backup created: {backup_path}")
+
+              # Update frontend cache
+              frontend_cache = project_root / "frontend" / "programs-cache.json"
+              shutil.copy2(json_path, frontend_cache)
+              print(f"✓ Frontend cache updated: {frontend_cache}")
+
+          except json.JSONDecodeError as e:
+              print(f"✗ Invalid JSON: {e}")
+              sys.exit(1)
+      else:
+          print(f"✗ Error: programs.json not found at {json_path}")
+          sys.exit(1)
+    dependsOn:
+      - scrape-programs
+
+  - id: notify-completion
+    type: io.kestra.plugin.scripts.python.Script
+    description: Log completion status
+    script: |
+      import os
+      from pathlib import Path
+
+      project_root = Path("{{ inputs.project_root }}") if "{{ inputs.project_root }}" != "/app" else Path(__file__).resolve().parent.parent
+      os.chdir(project_root)
+
+      json_path = project_root / "programs.json"
+      if json_path.exists():
+          file_size = json_path.stat().st_size
+          print(f"✓ Workflow completed successfully. programs.json size: {file_size} bytes")
+      else:
+          print("✗ Workflow completed but programs.json not found")
+
+    dependsOn:
+      - validate-and-backup
+
+triggers:
+  - id: daily-schedule
+    type: io.kestra.core.models.triggers.types.Schedule
+    cron: "0 2 * * *"  # Run daily at 2 AM UTC
+    timezone: "UTC"
+
+  - id: manual-trigger
+    type: io.kestra.core.models.triggers.types.Webhook
+    description: "Manual trigger for testing the workflow"
+

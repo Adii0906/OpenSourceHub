@@ -1,4 +1,5 @@
 const programsGrid = document.getElementById("programs-grid");
+const filterButtons = document.querySelectorAll(".filter-chip");
 const subscribeForm = document.getElementById("subscribe-form");
 const subscribeEmail = document.getElementById("subscribe-email");
 const subscribeStatus = document.getElementById("subscribe-status");
@@ -15,89 +16,7 @@ const sidebarSendBtn = document.getElementById("sidebar-send");
 const sidebarMessages = document.getElementById("sidebar-messages");
 
 let currentDifficultyFilter = "";
-let currentTechFilter = "";
 const API_BASE = "http://localhost:8000";
-
-// Typewriter-style rotating text inside the main hero title
-const typewriterPhrases = [
-  "in one place",
-  "in one platform"
-];
-let twPhraseIndex = 0;
-let twCharIndex = 0;
-let twDeleting = false;
-const TYPING_SPEED = 48; // ms per char
-const DELETING_SPEED = 28;
-const PAUSE_AFTER_TYPING = 1500; // ms
-const PAUSE_AFTER_DELETING = 300; // ms
-
-function typewriterTick(){
-  const container = document.getElementById('typewriter');
-  if(!container) return;
-  const textEl = container.querySelector('.tw-text');
-  if(!textEl) return;
-  const phrase = typewriterPhrases[twPhraseIndex];
-
-  if(!twDeleting){
-    // type next char
-    twCharIndex++;
-    textEl.textContent = phrase.slice(0, twCharIndex);
-    if(twCharIndex === phrase.length){
-      // fully typed — pause then start deleting
-      twDeleting = true;
-      setTimeout(typewriterTick, PAUSE_AFTER_TYPING);
-      return;
-    }
-    setTimeout(typewriterTick, TYPING_SPEED + Math.random()*40);
-  } else {
-    // deleting
-    twCharIndex--;
-    textEl.textContent = phrase.slice(0, twCharIndex);
-    if(twCharIndex === 0){
-      // move to next phrase
-      twDeleting = false;
-      twPhraseIndex = (twPhraseIndex + 1) % typewriterPhrases.length;
-      setTimeout(typewriterTick, PAUSE_AFTER_DELETING);
-      return;
-    }
-    setTimeout(typewriterTick, DELETING_SPEED + Math.random()*30);
-  }
-}
-
-function startTypewriter(){
-  const el = document.getElementById('typewriter');
-  if(!el) return;
-  // initialize
-  twPhraseIndex = 0;
-  twCharIndex = 0;
-  twDeleting = false;
-  // Ensure inner text and cursor elements exist
-  let textEl = el.querySelector('.tw-text');
-  let cursorEl = el.querySelector('.tw-cursor');
-  if(!textEl){
-    textEl = document.createElement('span');
-    textEl.className = 'tw-text';
-    el.appendChild(textEl);
-  }
-  if(!cursorEl){
-    cursorEl = document.createElement('span');
-    cursorEl.className = 'tw-cursor';
-    cursorEl.setAttribute('aria-hidden', 'true');
-    // Leave empty; visual cursor is drawn with CSS for a thin bar
-    cursorEl.textContent = '';
-    el.appendChild(cursorEl);
-  }
-
-  // Reserve width so changing text doesn't shift layout: use longest phrase length in ch units
-  const maxLen = typewriterPhrases.reduce((m, p) => Math.max(m, p.length), 0);
-  el.style.minWidth = `${maxLen}ch`;
-  el.style.display = 'inline-block';
-  el.style.whiteSpace = 'nowrap';
-  el.style.overflow = 'visible';
-  textEl.textContent = '';
-  // kick off
-  setTimeout(typewriterTick, 400);
-}
 
 // Sidebar AI Mentor toggle functionality
 function toggleAiMentorSidebar() {
@@ -133,17 +52,100 @@ function initNavbarLinks() {
   });
 }
 
+// Reminder management
+function getReminders() {
+  const reminders = localStorage.getItem('programReminders');
+  return reminders ? JSON.parse(reminders) : {};
+}
+
+function saveReminders(reminders) {
+  localStorage.setItem('programReminders', JSON.stringify(reminders));
+}
+
+function toggleReminder(programId, programName, deadline) {
+  const reminders = getReminders();
+  const reminderKey = `program_${programId}`;
+  
+  if (reminders[reminderKey]) {
+    // Remove reminder
+    delete reminders[reminderKey];
+    saveReminders(reminders);
+    updateReminderButton(programId, false);
+    showNotification(`Reminder removed for ${programName}`, 'info');
+  } else {
+    // Add reminder
+    reminders[reminderKey] = {
+      programId,
+      programName,
+      deadline,
+      createdAt: new Date().toISOString()
+    };
+    saveReminders(reminders);
+    updateReminderButton(programId, true);
+    showNotification(`Reminder set for ${programName}! Deadline: ${deadline}`, 'success');
+  }
+}
+
+function updateReminderButton(programId, isSet) {
+  const btn = document.querySelector(`.reminder-btn[data-program-id="${programId}"]`);
+  if (btn) {
+    if (isSet) {
+      btn.classList.add('reminder-active');
+      btn.querySelector('.reminder-text').textContent = 'Reminder Set';
+    } else {
+      btn.classList.remove('reminder-active');
+      btn.querySelector('.reminder-text').textContent = 'Set Reminder';
+    }
+  }
+}
+
+function showNotification(message, type = 'success') {
+  // Create notification element
+  const notification = document.createElement('div');
+  notification.className = `notification notification-${type}`;
+  notification.textContent = message;
+  document.body.appendChild(notification);
+  
+  // Animate in
+  setTimeout(() => notification.classList.add('show'), 10);
+  
+  // Remove after 3 seconds
+  setTimeout(() => {
+    notification.classList.remove('show');
+    setTimeout(() => notification.remove(), 300);
+  }, 3000);
+}
+
+function checkReminders() {
+  const reminders = getReminders();
+  const now = new Date();
+  
+  Object.values(reminders).forEach(reminder => {
+    // Parse deadline (simplified - in production, use proper date parsing)
+    const deadlineStr = reminder.deadline;
+    // This is a simplified check - you'd want proper date parsing
+    console.log(`Reminder for ${reminder.programName}: ${deadlineStr}`);
+  });
+}
+
+// Update reminder button states when rendering
+function updateReminderButtons() {
+  const reminders = getReminders();
+  Object.keys(reminders).forEach(key => {
+    const programId = reminders[key].programId;
+    updateReminderButton(programId, true);
+  });
+}
+
 scrollProgramsBtn.addEventListener("click", () => {
   document.getElementById("programs-section").scrollIntoView({ behavior: "smooth" });
 });
 
 scrollChatBtn.addEventListener("click", () => {
-  // Open the AI Mentor sidebar instead of scrolling to a non-existent chat section
-  toggleAiMentorSidebar();
-  // focus the sidebar input shortly after it opens
+  document.getElementById("chat-section").scrollIntoView({ behavior: "smooth" });
   setTimeout(() => {
-    if (sidebarInput) sidebarInput.focus();
-  }, 300);
+    agentInput.focus();
+  }, 500);
 });
 
 async function loadProgramsFromCache() {
@@ -156,48 +158,18 @@ async function loadProgramsFromCache() {
       return data;
     }
   } catch (error) {
-    console.error('Error loading cached programs:', error);
+    console.error('Error loading from cache:', error);
   }
   return null;
 }
 
-// Client-side filtering for cached programs when API is unavailable
-function filterProgramsClientSide(programs) {
-  let filtered = programs;
-  
-  // Filter by difficulty if set
-  if (currentDifficultyFilter) {
-    filtered = filtered.filter(p => p.difficulty === currentDifficultyFilter);
-  }
-  
-  // Filter by tech category if set
-  if (currentTechFilter) {
-    filtered = filtered.filter(p => {
-      // Check if program has a tech/category field that matches
-      if (p.tech && p.tech.toLowerCase() === currentTechFilter.toLowerCase()) {
-        return true;
-      }
-      // Also check tags for tech category
-      if (p.tags && Array.isArray(p.tags)) {
-        return p.tags.some(tag => tag.toLowerCase().includes(currentTechFilter.toLowerCase()));
-      }
-      return false;
-    });
-  }
-  
-  return filtered;
-}
-
-async function loadPrograms() {
+async function loadPrograms(difficulty = "") {
   try {
     // Show loading state
     programsGrid.innerHTML = '<div class="program-card" style="grid-column: 1 / -1; text-align: center; padding: 40px;"><p>Loading programs...</p></div>';
 
     let url = `${API_BASE}/programs`;
-    const params = new URLSearchParams();
-    if (currentDifficultyFilter) params.append('difficulty', currentDifficultyFilter);
-    if (currentTechFilter) params.append('tech', currentTechFilter);
-    if (params.toString()) url += `?${params.toString()}`;
+    if (difficulty) url += `?difficulty=${encodeURIComponent(difficulty)}`;
 
     const res = await fetch(url);
     if (!res.ok) {
@@ -212,9 +184,7 @@ async function loadPrograms() {
       const cachedData = await loadProgramsFromCache();
       if (cachedData && cachedData.length > 0) {
         console.log('Using cached programs data');
-        // Apply client-side filtering if needed
-        const filteredData = filterProgramsClientSide(cachedData);
-        renderPrograms(filteredData);
+        renderPrograms(cachedData);
         return;
       }
 
@@ -234,9 +204,7 @@ async function loadPrograms() {
     const cachedData = await loadProgramsFromCache();
     if (cachedData && cachedData.length > 0) {
       console.log('Falling back to cached programs data');
-      // Apply client-side filtering if needed
-      const filteredData = filterProgramsClientSide(cachedData);
-      renderPrograms(filteredData);
+      renderPrograms(cachedData);
       return;
     }
 
@@ -326,6 +294,10 @@ function renderPrograms(programs) {
         ${datesHTML}
       </div>
       <div class="program-action">
+        <button class="reminder-btn" data-program-id="${p.id}" onclick="event.stopPropagation(); toggleReminder(${p.id}, '${p.name.replace(/'/g, "\\'")}', '${p.deadline.replace(/'/g, "\\'")}')">
+          <span class="reminder-icon">🔔</span>
+          <span class="reminder-text">Set Reminder</span>
+        </button>
         <a href="${p.official_site}" target="_blank" class="program-link" onclick="event.stopPropagation()">
           Apply Now
           <span class="program-link-icon">↗</span>
@@ -335,8 +307,9 @@ function renderPrograms(programs) {
     
     // Make entire card clickable
     card.addEventListener('click', (e) => {
-      // Don't trigger if clicking on the link
-      if (e.target.tagName !== 'A' && !e.target.closest('a')) {
+      // Don't trigger if clicking on the link or reminder button
+      if (e.target.tagName !== 'A' && !e.target.closest('a') && 
+          e.target.tagName !== 'BUTTON' && !e.target.closest('button')) {
         window.open(p.official_site, '_blank');
       }
     });
@@ -353,35 +326,21 @@ function renderPrograms(programs) {
       easing: 'easeOutQuad'
     });
   });
+  
+  // Update reminder button states after rendering
+  setTimeout(updateReminderButtons, 100);
 }
 
 
-// Initialize filter event listeners
-function initializeFilters() {
-  // Tech category filter event listeners
-  const techFilterButtons = document.querySelectorAll(".tech-filter");
-  techFilterButtons.forEach((btn) => {
-    btn.addEventListener("click", () => {
-      techFilterButtons.forEach((b) => b.classList.remove("active"));
-      btn.classList.add("active");
-      const tech = btn.getAttribute("data-tech") || "";
-      currentTechFilter = tech;
-      loadPrograms();
-    });
+filterButtons.forEach((btn) => {
+  btn.addEventListener("click", () => {
+    filterButtons.forEach((b) => b.classList.remove("active"));
+    btn.classList.add("active");
+    const difficulty = btn.getAttribute("data-difficulty") || "";
+    currentDifficultyFilter = difficulty;
+    loadPrograms(difficulty);
   });
-
-  // Difficulty filter event listeners
-  const difficultyFilterButtons = document.querySelectorAll(".difficulty-filter");
-  difficultyFilterButtons.forEach((btn) => {
-    btn.addEventListener("click", () => {
-      difficultyFilterButtons.forEach((b) => b.classList.remove("active"));
-      btn.classList.add("active");
-      const difficulty = btn.getAttribute("data-difficulty") || "";
-      currentDifficultyFilter = difficulty;
-      loadPrograms();
-    });
-  });
-}
+});
 
 async function sendAgentMessage() {
   const message = sidebarInput.value.trim();
@@ -564,14 +523,8 @@ function initializePage() {
   // Initialize navbar links
   initNavbarLinks();
   
-  // Initialize filter buttons
-  initializeFilters();
-  
   // Load programs
   loadPrograms();
-
-  // Start inline typewriter in the hero title
-  startTypewriter();
 }
 
 // Initialize when DOM is ready

@@ -6,4 +6,3 @@ python-dotenv
 requests
 beautifulsoup4
 email-validator
-python-dateutil
