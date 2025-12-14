@@ -16,7 +16,10 @@ const sidebarMessages = document.getElementById("sidebar-messages");
 
 let currentDifficultyFilter = "";
 let currentTechFilter = "";
-const API_BASE = "http://localhost:8000";
+// API base URL - connected to Render backend
+const API_BASE = window.location.hostname === 'localhost'
+    ? "http://localhost:8000"
+    : "https://opensourcehub-fnsf.onrender.com";
 
 // Typewriter-style rotating text inside the main hero title
 const typewriterPhrases = [
@@ -193,7 +196,7 @@ async function loadPrograms() {
     // Show loading state
     programsGrid.innerHTML = '<div class="program-card" style="grid-column: 1 / -1; text-align: center; padding: 40px;"><p>Loading programs...</p></div>';
 
-    let url = `${API_BASE}/programs`;
+    let url = `${API_BASE}/api/programs`;
     const params = new URLSearchParams();
     if (currentDifficultyFilter) params.append('difficulty', currentDifficultyFilter);
     if (currentTechFilter) params.append('tech', currentTechFilter);
@@ -400,7 +403,7 @@ async function sendAgentMessage() {
   const thinkingNode = sidebarMessages.lastElementChild;
 
   try {
-    const res = await fetch(`${API_BASE}/agent-chat`, {
+    const res = await fetch(`${API_BASE}/api/agent/chat`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -469,7 +472,7 @@ subscribeForm.addEventListener("submit", async (e) => {
   const email = subscribeEmail.value.trim();
   if (!email) return;
   try {
-    const res = await fetch(`${API_BASE}/subscribe-email`, {
+    const res = await fetch(`${API_BASE}/api/subscribe`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ email }),

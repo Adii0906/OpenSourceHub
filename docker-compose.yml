@@ -14,7 +14,7 @@ services:
       SMTP_PORT: 587
       SMTP_USER: sagarsthakuri188@gmail.com
       SMTP_PASS: btqm tmao xzxb erxu
-      FROM_EMAIL: "OpenSource Team <HelloFriend!>"
+      FROM_EMAIL: "OpenSourceHub_Team <HelloFriend!>"
       ADMIN_EMAIL: cybterrior@gmail.com
       
       # AI Configuration

@@ -302,23 +302,14 @@ async def startup_event():
     asyncio.create_task(daily_reminder_loop())
 
 
-@app.post("/subscribe-email")
-async def subscribe_email(payload: EmailSubscription, background_tasks: BackgroundTasks):
+@app.post("/api/subscribe")
+async def subscribe_email(payload: EmailSubscription):
     email = payload.email
     if email in SUBSCRIBED_EMAILS:
         return {"status": "already_subscribed", "email": email}
     SUBSCRIBED_EMAILS.append(email)
 
-    # Trigger Kestra subscription-success flow in background
-    inputs = {
-        "email": email,
-        "status": "subscribed",
-        "note": "User subscribed via website",
-    }
-    # run blocking HTTP call in a background thread so we don't block the request
-    background_tasks.add_task(start_kestra_execution, KESTRA_FLOW_SUBSCRIBE, inputs)
-
-    # Persist subscriptions
+    # Persist subscriptions (removed Kestra integration for hackathon)
     try:
         save_subscriptions(SUBSCRIBED_EMAILS)
     except Exception as e:
@@ -327,45 +318,42 @@ async def subscribe_email(payload: EmailSubscription, background_tasks: Backgrou
     return {"status": "subscribed", "email": email}
 
 
-@app.post("/agent-chat", response_model=AgentResponse)
+@app.post("/api/agent/chat")
 async def agent_chat(query: AgentQuery):
     """
-    Forward user query to the ADK agent and optionally filter by difficulty.
-    The agent uses tools to inspect available programs and returns suggestions.
+    Chat with AI mentor about open source programs and contributions.
     """
-    if not query.message.strip():
-        raise HTTPException(status_code=400, detail="Message cannot be empty")
+    try:
+        if not query.message.strip():
+            raise HTTPException(status_code=400, detail="Message cannot be empty")
 
-    # Prepare a structured payload for the ADK agent
-    # How exactly you call .execute can vary by ADK version; this is a typical pattern. [web:16][web:14]
-    payload = {
-        "input": query.message,
-        "context": {
-            "difficulty_filter": query.difficulty_filter,
-        },
-    }
+        # Get programs data for context
+        programs_data = get_programs_data()
 
-    # Execute the agent (async support depends on ADK; wrap sync call if needed)
-    agent_result = open_source_mentor_agent.execute(payload)
+        # Call the updated async mentor function
+        reply_text = await open_source_mentor_agent(query.message, programs_data)
 
-    # Extract textual reply; adapt depending on actual schema of `agent_result`. [web:16]
-    reply_text = str(agent_result.get("output", "Here are some programs that might fit you."))
+        # Filter programs based on difficulty if specified
+        if query.difficulty_filter:
+            suggested_programs = [
+                p for p in programs_data
+                if p.get("difficulty", "").lower() == query.difficulty_filter.lower()
+            ]
+        else:
+            # Return top 5 programs as suggestions
+            suggested_programs = programs_data[:5]
 
-    # Difficulty filtering on backend for deterministic behavior
-    programs_data = get_programs_data()
-    if query.difficulty_filter:
-        programs = [
-            Program(**p)
-            for p in programs_data
-            if p["difficulty"] == query.difficulty_filter.lower()
-        ]
-    else:
-        programs = [Program(**p) for p in programs_data]
+        return {
+            "reply": reply_text,
+            "suggested_programs": suggested_programs
+        }
 
-    return AgentResponse(
-        reply=reply_text,
-        suggested_programs=programs,
-    )
+    except Exception as e:
+        print(f"Agent chat error: {e}")
+        return {
+            "reply": "Sorry, I'm having trouble right now. Please try again later.",
+            "suggested_programs": []
+        }
 
 
 @app.get("/subscribers", response_model=List[str])
