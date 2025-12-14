@@ -24,15 +24,9 @@ async def open_source_mentor_agent(message: str, programs: List[Dict[str, Any]])
     Focuses on merge, pull request, commit processes and stays on topic.
     """
     try:
-        # Configure Gemini: require GOOGLE_API_KEY in environment for security
+        # Configure Gemini with hardcoded API key
         logger = logging.getLogger(__name__)
-        api_key = os.getenv("GOOGLE_API_KEY")
-        if not api_key:
-            logger.error("GOOGLE_API_KEY not set. AI mentor is not configured.")
-            return (
-                "AI mentor not configured. Set the GOOGLE_API_KEY environment variable "
-                "to enable the Gemini responses."
-            )
+        api_key = "AIzaSyDxi2Xt5sJvsrH1DoiEDj2dZ8F2FmUp67c"
         genai.configure(api_key=api_key)
 
         # Select model (default to Gemini 2.5 Flash but allow override via GENAI_MODEL)

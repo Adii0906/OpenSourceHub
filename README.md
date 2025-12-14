@@ -336,18 +336,8 @@ Navigate to: **http://localhost:8080/ui/executions**
 Create `.env` file (optional):
 
 ```env
-# Google Gemini (required for AI Mentor & workflows)
-# Set the following environment variables (do NOT commit your key to the repo):
-# - `GOOGLE_API_KEY`: Your Gemini API key
-# - `GENAI_MODEL` (optional): Model name to use (default: gemini-2.5-flash)
-
-# Example (POSIX/macOS):
-# export GOOGLE_API_KEY="YOUR_KEY"
-# export GENAI_MODEL="gemini-2.5-flash"
-
-# Example (Windows PowerShell):
-# setx GOOGLE_API_KEY "YOUR_KEY"
-# setx GENAI_MODEL "gemini-2.5-flash"
+# Gemini AI (already embedded in workflows)
+GEMINI_API_KEY=API_Key
 
 # SMTP (for reminders)
 SMTP_USERNAME=user mail

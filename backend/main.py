@@ -303,17 +303,28 @@ async def startup_event():
 
 
 @app.post("/api/subscribe")
-async def subscribe_email(payload: EmailSubscription):
+async def subscribe_email(payload: EmailSubscription, background_tasks: BackgroundTasks):
     email = payload.email
     if email in SUBSCRIBED_EMAILS:
         return {"status": "already_subscribed", "email": email}
     SUBSCRIBED_EMAILS.append(email)
 
-    # Persist subscriptions (removed Kestra integration for hackathon)
+    # Persist subscriptions
     try:
         save_subscriptions(SUBSCRIBED_EMAILS)
     except Exception as e:
         print(f"Error persisting subscription: {e}")
+
+    # Trigger Kestra workflow to send confirmation email
+    background_tasks.add_task(
+        start_kestra_execution,
+        KESTRA_FLOW_SUBSCRIBE,
+        {
+            "email": email,
+            "status": "subscribed",
+            "note": "New subscription from website"
+        }
+    )
 
     return {"status": "subscribed", "email": email}
 
