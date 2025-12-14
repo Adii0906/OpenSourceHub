@@ -1,5 +1,6 @@
 import os
 import google.generativeai as genai
+import logging
 from typing import List, Dict, Any
 import json
 from pathlib import Path
@@ -23,12 +24,34 @@ async def open_source_mentor_agent(message: str, programs: List[Dict[str, Any]])
     Focuses on merge, pull request, commit processes and stays on topic.
     """
     try:
-        # Configure Gemini
-        api_key = os.getenv("GOOGLE_API_KEY", "AIzaSyAb9AHy07_7AQhb4on2H5VugOUMM-uRyTk")
+        # Configure Gemini: require GOOGLE_API_KEY in environment for security
+        logger = logging.getLogger(__name__)
+        api_key = os.getenv("GOOGLE_API_KEY")
+        if not api_key:
+            logger.error("GOOGLE_API_KEY not set. AI mentor is not configured.")
+            return (
+                "AI mentor not configured. Set the GOOGLE_API_KEY environment variable "
+                "to enable the Gemini responses."
+            )
         genai.configure(api_key=api_key)
 
-        # Use Gemini 2.0 Flash (closest to 2.5 Flash available)
-        model = genai.GenerativeModel('gemini-1.5-flash')
+        # Select model (default to Gemini 2.5 Flash but allow override via GENAI_MODEL)
+        model_name = os.getenv("GENAI_MODEL", "gemini-2.5-flash")
+        try:
+            model = genai.GenerativeModel(model_name)
+            logger.info(f"Using generative model: {model_name}")
+        except Exception as e:
+            logger.warning(f"Failed to initialize model {model_name}: {e}")
+            try:
+                # fallback to a known-stable model
+                model = genai.GenerativeModel('gemini-1.5-pro')
+                logger.info("Using fallback model: gemini-1.5-pro")
+            except Exception as e2:
+                logger.error(f"All model initializations failed: {e2}")
+                return (
+                    "AI mentor is temporarily unavailable due to model initialization issues. "
+                    "Please try again later."
+                )
 
         # Create context from programs
         programs_context = "\n".join([
@@ -62,10 +85,14 @@ async def open_source_mentor_agent(message: str, programs: List[Dict[str, Any]])
         - Be concise but helpful
         """
 
+        print(f"🤖 AI Request: {message[:100]}...")
         response = model.generate_content(prompt)
-        return response.text.strip()
+        result = response.text.strip()
+        print(f"🤖 AI Response length: {len(result)} characters")
+        return result
 
     except Exception as e:
+        print(f"❌ AI Mentor Error: {str(e)}")
         # Fallback response for contribution guidance
         contribution_help = """
         Here's how to contribute to open source projects:
